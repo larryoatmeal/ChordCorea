@@ -3,7 +3,42 @@ package models.music
 import models.utility._
 import play.api.Logger
 
-case class Interval(intervalClass: Integer, quality: IntervalQualities.Value, ascending:Boolean)
+
+case class Interval(intervalClass: Integer, quality: IntervalQualities.Value, difference:Integer){
+
+  val ascending = difference > 0
+
+
+  def simplify(maxClass: Integer = 13):(Interval, Integer) = {
+    if(intervalClass <= maxClass){
+      (this, 0)
+    }
+    else{
+      val simplifiedIntervalClass = intervalClass % 7
+      val extraOctaves = intervalClass / 7
+      val interval = Interval(simplifiedIntervalClass, quality, difference)
+      (interval, extraOctaves)
+    }
+  }
+
+  def display(displayDirection: Boolean = true, maxClass: Integer = 13, displayExtraOctaves: Boolean = false):String = {
+    
+    val (interval, extraOctaves) = simplify(maxClass)
+    val beforeDirection = MyString.optionalAppend(s"${interval.quality}${interval.intervalClass}", 
+      s"+extraOctaves", displayExtraOctaves && extraOctaves > 0)
+
+    MyString.optionalAppend(beforeDirection, if(ascending) " up" else " dn", displayDirection)
+  }
+
+
+  def transpose(note: DisplayNoteWithOctave) = {
+    
+    
+
+  }
+
+
+}
 
 
 object Interval{
@@ -21,6 +56,7 @@ object Interval{
     NoteLetters.G -> 6
     )
 
+  val numberLetterMap = letterNumberMap.map(_.swap)
 
 
   def test{
@@ -28,11 +64,10 @@ object Interval{
     val notePairs = notes.iterator.sliding(2).toList.map(_.flatten)
     val intervals = notePairs.foreach{
       notes => {
-        Logger.debug(calculateInterval(notes(0), notes(1)).toString)
+        Logger.debug(calculateInterval(notes(0), notes(1)).display())
       }
     }
   }
-
 
   val defaultStarting = Map(
     1 -> 0,
@@ -56,6 +91,9 @@ object Interval{
     -4 -> IntervalQualities.dddd
     )
 
+  val perfectsToOffset = offsetForPerfects.map(_.swap)
+
+
   val offsetForRegulars = Map(
     0 -> IntervalQualities.M,
     1 -> IntervalQualities.A,
@@ -68,6 +106,9 @@ object Interval{
     -4 -> IntervalQualities.ddd,
     -5 -> IntervalQualities.dddd
     )
+
+  val regularsToOffset = offsetForRegulars.map(_.swap)
+
 
 
   def calculateInterval(noteA: DisplayNoteWithOctave, noteB:DisplayNoteWithOctave):Interval = {
@@ -89,6 +130,9 @@ object Interval{
     val intervalOffsetFromDefault = intervalSize - defaultStarting(intervalClass) 
 
 
+
+
+
     val intervalQuality = intervalClass match{
       case 1 | 4 | 5 => 
         offsetForPerfects(intervalOffsetFromDefault)
@@ -98,38 +142,7 @@ object Interval{
 
 
     val intervalClassOctaveExtend = intervalClass + numberOfLetters*extraOctaves
-
-
-    // val letterNumberA = letterNumberMap(noteA.displayNote.letter)
-    // val letterNumberB = letterNumberMap(noteB.displayNote.letter)
-
-    // Logger.debug(s"$intervalClass$intervalQuality")
-    Interval(intervalClassOctaveExtend, intervalQuality, difference > 0)
-
-    // Logger.debug(s"octave:$extraOctaves")
-
-    // Logger.debug(s"A:$letterNumberA")
-    // Logger.debug(s"B:$letterNumberB")
-
-
-
-
-    // //i.e. 1, 2, 3, 4, 5, 6, 7, 8, etc.
-    // val intervalClass = MyMath.mod(
-    //   letterNumberMap(noteB.displayNote.letter) - 
-    //   letterNumberMap(noteA.displayNote.letter),
-    //   numberOfLetters) + 1
-
-    // val intervalClassOctaveExtend = intervalClass + numberOfLetters*extraOctaves
-
-
-    // Logger.debug(intervalClass.toString)
-
-    // Logger.debug(intervalClassOctaveExtend.toString)
-
-
-
-
+    Interval(intervalClassOctaveExtend, intervalQuality, difference)
   }
 
 

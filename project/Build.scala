@@ -26,6 +26,7 @@ object ApplicationBuild extends Build {
       |// make app resources accessible
       |Thread.currentThread.setContextClassLoader(getClass.getClassLoader)
       |new play.core.StaticApplication(new java.io.File("."))
+      |import models.music._
       """.stripMargin    
   )
 
