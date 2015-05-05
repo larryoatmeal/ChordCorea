@@ -31,12 +31,19 @@ case class Interval(intervalClass: Integer, quality: IntervalQualities.Value, di
   }
 
 
-  def transpose(note: DisplayNoteWithOctave) = {
-    
-    
+  def transpose(note: DisplayNoteWithOctave): DisplayNoteWithOctave = {
+    // Logger.debug(s"Transposing $note by $this")
 
+    val originalLetterNumber = NoteUtils.letterNumberMap(note.displayNote.letter)
+
+    val newLetterNumber = 
+      if(ascending) MyMath.mod(originalLetterNumber + intervalClass - 1, 7)
+      else MyMath.mod(originalLetterNumber - (intervalClass - 1), 7)
+
+    val newLetter = NoteUtils.numberLetterMap(newLetterNumber)
+    // Logger.debug(s"New letter: $newLetter")
+    NoteUtils.noteFromMidi(note.midify.transpose(difference), newLetter)
   }
-
 
 }
 
@@ -44,27 +51,23 @@ case class Interval(intervalClass: Integer, quality: IntervalQualities.Value, di
 object Interval{
 
 
-  val numberOfLetters = 7
-  val numberOfNotes = 12
-  val letterNumberMap = Map(
-    NoteLetters.A -> 0,
-    NoteLetters.B -> 1,
-    NoteLetters.C -> 2,
-    NoteLetters.D -> 3,
-    NoteLetters.E -> 4,
-    NoteLetters.F -> 5,
-    NoteLetters.G -> 6
-    )
-
-  val numberLetterMap = letterNumberMap.map(_.swap)
+  
 
 
   def test{
-    val notes = List("A4","C4","G3","Ab4","Bb3","D4","D#4","E7","Ebb7","E##7","Cbb4","Cbb4").map(NoteUtils.parseWithOctave)
-    val notePairs = notes.iterator.sliding(2).toList.map(_.flatten)
-    val intervals = notePairs.foreach{
+    val notes = List("A4","C4","G3","Ab4","Bb3","D4","D#4","E7","Ebb7","E##7","Cbb4","Cbb4").map(NoteUtils.parseWithOctave).flatten
+    val notePairs = notes.iterator.sliding(2).toList
+    val intervals = notePairs.map{
       notes => {
-        Logger.debug(calculateInterval(notes(0), notes(1)).display())
+        calculateInterval(notes(0), notes(1))
+      }
+    }
+    intervals.foreach{
+      interval => notes.foreach{
+        note => {
+          Logger.debug("-------------------------------")
+          Logger.debug(interval.transpose(note).toString)
+        }
       }
     }
   }
@@ -113,26 +116,23 @@ object Interval{
 
   def calculateInterval(noteA: DisplayNoteWithOctave, noteB:DisplayNoteWithOctave):Interval = {
 
-    val difference = NoteUtils.midify(noteB).midi - NoteUtils.midify(noteA).midi
+    val difference = noteB.midify.midi - noteA.midify.midi
 
-    val intervalSize = math.abs(difference % numberOfNotes) // -13 goes to 1 instead of -13 going to 11 in real mod
-    val extraOctaves = math.abs(difference / numberOfNotes)
+    val intervalSize = math.abs(difference % NoteUtils.numberOfNotes) // -13 goes to 1 instead of -13 going to 11 in real mod
+    val extraOctaves = math.abs(difference / NoteUtils.numberOfNotes)
 
-    val letterNumberA = letterNumberMap(noteA.displayNote.letter)
-    val letterNumberB = letterNumberMap(noteB.displayNote.letter)
+    val letterNumberA = NoteUtils.letterNumberMap(noteA.displayNote.letter)
+    val letterNumberB = NoteUtils.letterNumberMap(noteB.displayNote.letter)
 
     val intervalClass = 
-      (if (difference > 0) MyMath.mod(letterNumberB - letterNumberA, numberOfLetters) 
-      else MyMath.mod(letterNumberA - letterNumberB, numberOfLetters))+1
+      (if (difference > 0) MyMath.mod(letterNumberB - letterNumberA, NoteUtils.numberOfLetters) 
+      else MyMath.mod(letterNumberA - letterNumberB, NoteUtils.numberOfLetters))+1
 
     // Now we must figure out which quality interval is. 1, 4, 5 default perfect, 2,3,6,7
 
     val intervalOffsetFromDefault = intervalSize - defaultStarting(intervalClass) 
 
-
-
-
-
+    
     val intervalQuality = intervalClass match{
       case 1 | 4 | 5 => 
         offsetForPerfects(intervalOffsetFromDefault)
@@ -141,7 +141,7 @@ object Interval{
     }
 
 
-    val intervalClassOctaveExtend = intervalClass + numberOfLetters*extraOctaves
+    val intervalClassOctaveExtend = intervalClass + NoteUtils.numberOfLetters*extraOctaves
     Interval(intervalClassOctaveExtend, intervalQuality, difference)
   }
 

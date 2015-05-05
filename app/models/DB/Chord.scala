@@ -1,1 +1,0 @@
-// case class Chord(notes: List[Note], )

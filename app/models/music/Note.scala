@@ -3,11 +3,24 @@ package models.music
 import play.api.Logger
 import models.utility._
 
-case class MidiNote(midi: Integer)
+case class MidiNote(midi: Integer){
+
+  def transpose(semitones: Integer) = {
+    MidiNote(midi + semitones)
+  }
+
+}
 
 case class DisplayNote(letter: NoteLetters.Value, sharpFlat: SharpFlats.Value)
 
-case class DisplayNoteWithOctave(displayNote: DisplayNote, octave: Integer)
+case class DisplayNoteWithOctave(displayNote: DisplayNote, octave: Integer){
+
+  val midify = {
+    val base = NoteUtils.letterToBaseMidi(displayNote.letter) 
+    val offset = NoteUtils.sharpFlatToOffset(displayNote.sharpFlat)
+    MidiNote(base + offset + NoteUtils.octaveOffset(octave))
+  }
+}
 
 object NoteUtils{//parses notes into DisplayNote and DisplayNoteWithOctave
 
@@ -37,6 +50,44 @@ object NoteUtils{//parses notes into DisplayNote and DisplayNoteWithOctave
     "N" -> SharpFlats.Natural,
     "n" -> SharpFlats.Natural
   )
+
+  val letterToBaseMidi = Map(
+   NoteLetters.C -> 0,
+   NoteLetters.D -> 2,
+   NoteLetters.E -> 4,
+   NoteLetters.F -> 5,
+   NoteLetters.G -> 7,
+   NoteLetters.A -> 9,
+   NoteLetters.B -> 11
+  )
+
+
+  val sharpFlatToOffset = Map(
+     SharpFlats.Flat -> -1,
+     SharpFlats.Sharp -> 1,
+     SharpFlats.DoubleFlat -> -2,
+     SharpFlats.DoubleSharp -> 2,
+     SharpFlats.Nothing -> 0,
+     SharpFlats.Natural -> 0
+    )
+
+  val offsetToSharpFlat = sharpFlatToOffset.map(_.swap)
+
+  val numberOfLetters = 7
+  val numberOfNotes = 12
+  val letterNumberMap = Map(
+    NoteLetters.A -> 0,
+    NoteLetters.B -> 1,
+    NoteLetters.C -> 2,
+    NoteLetters.D -> 3,
+    NoteLetters.E -> 4,
+    NoteLetters.F -> 5,
+    NoteLetters.G -> 6
+    )
+
+  val numberLetterMap = letterNumberMap.map(_.swap)
+
+
   // n for natural
   val pattern = "^([ABCDEFGabcdefg])(##|bb|[b#Nn])?$".r
 
@@ -77,35 +128,13 @@ object NoteUtils{//parses notes into DisplayNote and DisplayNoteWithOctave
 
   //MIDI conversion
 
-  val letterToBaseMidi = Map(
-     NoteLetters.C -> 0,
-     NoteLetters.D -> 2,
-     NoteLetters.E -> 4,
-     NoteLetters.F -> 5,
-     NoteLetters.G -> 7,
-     NoteLetters.A -> 9,
-     NoteLetters.B -> 11
-    )
 
 
 
-  val sharpFlatToOffset = Map(
-     SharpFlats.Flat -> -1,
-     SharpFlats.Sharp -> 1,
-     SharpFlats.DoubleFlat -> -2,
-     SharpFlats.DoubleSharp -> 2,
-     SharpFlats.Nothing -> 0,
-     SharpFlats.Natural -> 0
-    )
-
-  val offsetToSharpFlat = sharpFlatToOffset.map(_.swap)
 
 
-  def midify(displayNoteWithOctave: DisplayNoteWithOctave) = {
-    val base = letterToBaseMidi(displayNoteWithOctave.displayNote.letter) 
-    val offset = sharpFlatToOffset(displayNoteWithOctave.displayNote.sharpFlat)
-    MidiNote(base + offset + octaveOffset(displayNoteWithOctave.octave))
-  }
+
+
 
   def octaveOffset(octave: Integer) = {
     (octave + 1) * 12 //C4 is 60
@@ -137,12 +166,8 @@ object NoteUtils{//parses notes into DisplayNote and DisplayNoteWithOctave
   }
 
 
-  def noteFromMidi(midiNote: MidiNote, letter: NoteLetters.Value) = {//inverse of midify
+  def noteFromMidi(midiNote: MidiNote, letter: NoteLetters.Value):DisplayNoteWithOctave = {//inverse of midify
     val base = letterToBaseMidi(letter)
-    
-
-    Logger.debug(s"Base:$base, x:${midiNote.midi % 12}")
-
     val offset = closestNeighborMod(base, midiNote.midi % 12, 12)
 
     if(offsetToSharpFlat.contains(offset)){
@@ -150,9 +175,17 @@ object NoteUtils{//parses notes into DisplayNote and DisplayNoteWithOctave
       val octaves = midiNote.midi / 12 - 1
       DisplayNoteWithOctave(DisplayNote(letter, sharpFlat),octaves)
     }
-    else{
-      DisplayNoteWithOctave(DisplayNote(NoteLetters.C, SharpFlats.Nothing),-1)
-      Logger.error(s"INVALID NOTE FROM MIDI:$midiNote,$letter")
+    else{//Sometimes impossible. For example, tranpose Cbb down by M6. Should be Ebbb. But that's just stupid
+
+      Logger.warn(s"INVALID NOTE FROM MIDI:$midiNote,$letter, try again")
+
+      //if too high, try going to the letter above
+      if(offset > 2){
+        noteFromMidi(midiNote, numberLetterMap(MyMath.mod(letterNumberMap(letter) + 1, 7)))
+      }
+      else{//if too low, try going to the letter below
+        noteFromMidi(midiNote, numberLetterMap(MyMath.mod(letterNumberMap(letter) - 1, 7)))
+      }
     }
 
   }
